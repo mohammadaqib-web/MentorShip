@@ -1,6 +1,5 @@
 const express = require('express');
-const { addUser, loginUser, makeProfile, verifyOTP, resendOTPVerificationCode } = require('../controllers/user_controller');
-const authenticate = require('../middlewares/protectedRoute');
+const { addUser, loginUser, verifyOTP, resendOTPVerificationCode } = require('../controllers/user_controller');
 const router = express.Router();
 
 router.post('/addUser',addUser);

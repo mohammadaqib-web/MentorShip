@@ -3,7 +3,10 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const nodemailer = require("nodemailer");
 const userOtpVerification = require('../models/user_otp_model');
-const dotenv = require('dotenv').config
+const dotenv = require('dotenv').config;
+const cloudinary = require('cloudinary');
+const menteeModel = require('../models/mentee_model');
+const mentorModel = require('../models/mentor_model');
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
@@ -12,6 +15,13 @@ const transporter = nodemailer.createTransport({
     user: process.env.SMTP_MAIL,
     pass: process.env.SMTP_PASS,
   },
+});
+
+
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
 const addUser = async(req,res) => {
@@ -149,10 +159,173 @@ const sendOtpVerificationEmail = async(user,res)=>{
     }
 }
 
+const editMenteeProfile = async (req, res) => {
+    const { name, domain, location } = req.body;
+    const image = req.file.path;
+
+    try {
+        if (!name || !domain || !location || !image) {
+            return res.status(400).json({ message: "All fields are mandatory!" });
+        }
+
+        const cloudinaryResult = await cloudinary.uploader.upload(image);
+        if (!cloudinaryResult) {
+            return res.status(400).json({ message: "Error while uploading image" });
+        }
+
+        const findMenteeData = await menteeModel.find({ userId: req.user._id });
+        if (findMenteeData.length > 0) {
+            const updateData = await menteeModel.updateOne({ userId: req.user._id }, { name, domain, location, image: cloudinaryResult.secure_url });
+            if (updateData.modifiedCount === 1) {
+                return res.status(200).json({ message: "Details updated successfully!" });
+            } else {
+                return res.status(400).json({ message: "Error while updating details!" });
+            }
+        } else {
+            const menteeData = new menteeModel({ userId: req.user._id, name, domain, location, image: cloudinaryResult.secure_url });
+            const resp = await menteeData.save();
+            if (resp) {
+                return res.status(200).json({ message: "Details saved successfully!" });
+            } else {
+                return res.status(400).json({ message: "Error while saving details!" });
+            }
+        }
+    } catch (error) {
+        return res.status(400).json({ message: error.message });
+    }
+}
+
+const editMentorProfile = async(req,res) => {
+    const {name,skills,about,location,company,profile} = req.body;
+    const image = req.file.path;
+
+    try {
+        if(!name||!skills||!about||!location||!company||!image||!profile){
+            return res.status(400).json({message:"All fields are mandatory!"});
+        }
+
+        const cloudinaryResult = await cloudinary.uploader.upload(image);
+        if (!cloudinaryResult) {
+            return res.status(400).json({ message: "Error while uploading image" });
+        }
+
+        const findMentorData = await mentorModel.find({ userId: req.user._id });
+        if (findMentorData.length > 0) {
+            const updateData = await mentorModel.updateOne({ userId: req.user._id }, { name, location, image: cloudinaryResult.secure_url,skills,about,company,profile });
+            if (updateData.modifiedCount === 1) {
+                return res.status(200).json({ message: "Details updated successfully!" });
+            } else {
+                return res.status(400).json({ message: "Error while updating details!" });
+            }
+        } else {
+            const mentorData = new mentorModel({ userId: req.user._id, name, location, image: cloudinaryResult.secure_url,skills,about,company,profile });
+            const resp = await mentorData.save();
+            if (resp) {
+                return res.status(200).json({ message: "Details saved successfully!" });
+            } else {
+                return res.status(400).json({ message: "Error while saving details!" });
+            }
+        }
+    } catch (error) {
+        return res.status(400).json({message:error.message});
+    }
+}
+
+const getAllMentors = async(req,res) => {
+    try {
+        const findMentors = await mentorModel.find();
+        if(findMentors.length<=0){
+            return res.status(400).json({message:"No Mentors Found!"});
+        }
+
+        return res.status(200).json({message:"Mentors Found",mentors:findMentors});
+    } catch (error) {
+        return res.status(400).json({message:error.message});
+    }
+}
+
+const getMentorsBySearch = async(req,res)=>{
+    const {name,location,profile} = req.body;
+
+    try {
+        if(!name&&!location&&!profile){
+            return res.status(400).json({message:"You have to fill atleast one section to search!"});
+        }
+
+        if(name){
+            const findByName = await mentorModel.find({name:{ $regex: name, $options: 'i' }});
+            if(!findByName){
+                return res.status(400).json({message:"Mentor not found!"});
+            }
+
+            return res.status(200).json({message:"Mentor Found",mentor:findByName});
+        }
+
+        if(location){
+            const findByLocation = await mentorModel.find({location:{ $regex: location, $options: 'i' }});
+            if(!findByLocation){
+                return res.status(400).json({message:"Mentor not found!"});
+            }
+
+            return res.status(200).json({message:"Mentor Found",mentor:findByLocation});
+        }
+
+        if(profile){
+            const findByProfile = await mentorModel.find({profile:{ $regex: profile, $options: 'i' }});
+            if(!findByProfile){
+                return res.status(400).json({message:"Mentor not found!"});
+            }
+
+            return res.status(200).json({message:"Mentor Found",mentor:findByProfile});
+        }
+
+        if(name&&location){
+            const find = await mentorModel.find({name:{ $regex: name, $options: 'i' },location:{ $regex: location, $options: 'i' }});
+            if(!find){
+                return res.status(400).json({message:"Mentor not found!"});
+            }
+
+            return res.status(200).json({message:"Mentor Found",mentor:find});
+        }
+
+        if(name&&profile){
+            const find = await mentorModel.find({name:{ $regex: name, $options: 'i' },profile:{ $regex: profile, $options: 'i' }});
+            if(!find){
+                return res.status(400).json({message:"Mentor not found!"});
+            }
+
+            return res.status(200).json({message:"Mentor Found",mentor:find});
+        }
+
+        if(profile&&location){
+            const find = await mentorModel.find({profile:{ $regex: profile, $options: 'i' },location:{ $regex: location, $options: 'i' }});
+            if(!find){
+                return res.status(400).json({message:"Mentor not found!"});
+            }
+
+            return res.status(200).json({message:"Mentor Found",mentor:find});
+        }
+
+        if(name&&location&&profile){
+            const find = await mentorModel.find({name:{ $regex: name, $options: 'i' },location:{ $regex: location, $options: 'i' },profile:{ $regex: profile, $options: 'i' }});
+            if(!find){
+                return res.status(400).json({message:"Mentor not found!"});
+            }
+
+            return res.status(200).json({message:"Mentor Found",mentor:find});
+        }
+    } catch (error) {
+        return res.status(400).json({message:error.message});
+    }
+}
+
 module.exports = {
     addUser,
     loginUser,
-    makeProfile,
     verifyOTP,
-    resendOTPVerificationCode
+    resendOTPVerificationCode,
+    editMenteeProfile,
+    editMentorProfile,
+    getAllMentors,
+    getMentorsBySearch
 }

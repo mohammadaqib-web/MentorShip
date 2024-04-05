@@ -7,6 +7,8 @@ const dotenv = require('dotenv').config;
 const cloudinary = require('cloudinary');
 const menteeModel = require('../models/mentee_model');
 const mentorModel = require('../models/mentor_model');
+const slotModel = require('../models/slot_model');
+const chatModel = require('../models/chat_model');
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
@@ -196,11 +198,11 @@ const editMenteeProfile = async (req, res) => {
 }
 
 const editMentorProfile = async(req,res) => {
-    const {name,skills,about,location,company,profile} = req.body;
+    const {name,skills,about,location,company,domain} = req.body;
     const image = req.file.path;
 
     try {
-        if(!name||!skills||!about||!location||!company||!image||!profile){
+        if(!name||!skills||!about||!location||!company||!image||!domain){
             return res.status(400).json({message:"All fields are mandatory!"});
         }
 
@@ -211,14 +213,14 @@ const editMentorProfile = async(req,res) => {
 
         const findMentorData = await mentorModel.find({ userId: req.user._id });
         if (findMentorData.length > 0) {
-            const updateData = await mentorModel.updateOne({ userId: req.user._id }, { name, location, image: cloudinaryResult.secure_url,skills,about,company,profile });
+            const updateData = await mentorModel.updateOne({ userId: req.user._id }, { name, location, image: cloudinaryResult.secure_url,skills,about,company,domain });
             if (updateData.modifiedCount === 1) {
                 return res.status(200).json({ message: "Details updated successfully!" });
             } else {
                 return res.status(400).json({ message: "Error while updating details!" });
             }
         } else {
-            const mentorData = new mentorModel({ userId: req.user._id, name, location, image: cloudinaryResult.secure_url,skills,about,company,profile });
+            const mentorData = new mentorModel({ userId: req.user._id, name, location, image: cloudinaryResult.secure_url,skills,about,company,domain });
             const resp = await mentorData.save();
             if (resp) {
                 return res.status(200).json({ message: "Details saved successfully!" });
@@ -319,6 +321,135 @@ const getMentorsBySearch = async(req,res)=>{
     }
 }
 
+const createSlot = async(req,res) =>{
+    const {slotDate,slotTime} = req.body;
+
+    try {
+        if(!slotDate||!slotTime){
+            return res.status(400).json({message:"Both fields are mandatory"});
+        }
+
+        const findSlot = await slotModel.find({postedBy:req.user._id,slotTime,slotDate});
+        if(findSlot){
+            return res.status(400).json({message:"You have already opened this slot!"});
+        }
+
+        const makeSlot = new slotModel({postedBy:req.user._id,slotTime,slotDate});
+        const saveSlot = await makeSlot.save();
+
+        return res.status(201).json({message:"Slot created successfully",slot:saveSlot});
+    } catch (error) {
+        return res.status(400).json({message:error.message});
+    }
+}
+
+const bookSlot = async (req, res) => {
+    const { slotId } = req.body;
+
+    try {
+        if (!slotId) {
+            return res.status(400).json({ message: "Empty slot ID!" });
+        }
+
+        const findSlot = await slotModel.find({ _id: slotId });
+        if (findSlot.length === 0) {
+            return res.status(400).json({ message: "Slot not found!" });
+        }
+
+        const slot = findSlot[0];
+
+        if (slot.bookedBy === req.user._id) {
+            return res.status(400).json({ message: "Slot is already booked by someone else!" });
+        } else if (slot.bookedBy !== null) {
+            return res.status(400).json({ message: "Slot is already booked by you!" });
+        }
+
+        const updateSlot = await slotModel.findOneAndUpdate({ _id: slotId }, { bookedBy: req.user._id });
+        if (!updateSlot) {
+            return res.status(400).json({ message: "Error while booking slot!" });
+        }
+
+        return res.status(200).json({ message: "Slot booked successfully!" });
+    } catch (error) {
+        return res.status(400).json({ message: error.message });
+    }
+}
+
+const chat = async (req, res) => {
+    const receiverId = req.params.id;
+    const senderId = req.user._id;
+    const message = req.body.message; 
+    const dateOptions = { timeZone: 'Asia/Kolkata', hours12:false };
+    const currentDate = new Date().toLocaleDateString('en-IN', dateOptions);
+    const currentTime = new Date().toLocaleTimeString('en-IN', dateOptions);
+
+    try {
+        if (!receiverId || !senderId) {
+            return res.status(400).json({ message: "Empty Id!" });
+        }
+
+        const findReceiver = await UserModel.findById(receiverId);
+        if (!findReceiver) {
+            return res.status(400).json({ message: "Receiver not found!" });
+        }
+
+        let chat = await chatModel.findOne({ chatBetween: { $all: [senderId, receiverId] } });
+        if (chat) {
+            chat.chat.push({ sentBy: senderId, message, sentAt: currentDate +`,`+ currentTime });
+            await chat.save();
+            return res.status(200).json({ message: "Message sent!", sentMessage: message });
+        }
+
+        chat = new chatModel({
+            chatBetween: [senderId, receiverId],
+            chat: [{ sentBy: senderId, message, sentAt: currentDate +`,`+  currentTime }]
+        });
+        await chat.save();
+        return res.status(201).json({ message: "Chat created successfully!" });
+    } catch (error) {
+        return res.status(400).json({ message: error.message });
+    }
+}
+
+const getChat = async(req,res) => {
+    const receiverId = req.params.id;
+    const senderId = req.user._id;
+
+    try {
+        if(!receiverId||!senderId){
+            return res.status(400).json({message:"Empty ID!"});
+        }
+
+        const chat = await chatModel.findOne({ chatBetween: { $all: [senderId, receiverId] } });
+        if(!chat){
+            return res.status(400).json({message:"Chat not found!"});
+        }        
+
+        return res.status(200).json({message:"Chat found!",chat:chat.chat});
+    } catch (error) {
+        return res.status(400).json({message:"Error Occurred!"});
+    }
+}
+
+const getMentorProfile = async(req,res)=>{
+    const mentorId = req.params.id;
+
+    try {
+        if(!mentorId){
+            return res.status(400).json({message:"Empty ID!"});
+        }
+
+        const findMentor = await mentorModel.findOne({userId:mentorId});
+        if(!findMentor){
+            return res.status(400).json({message:"Invalid ID!"});
+        }
+
+        return res.status(200).json({message:"Mentor Found!",mentor:findMentor});
+    } catch (error) {
+        return res.status(400).json({message:"Error Occurred!"});
+    }
+}
+
 module.exports = {
     addUser,
     loginUser,
@@ -327,5 +458,10 @@ module.exports = {
     editMenteeProfile,
     editMentorProfile,
     getAllMentors,
-    getMentorsBySearch
+    getMentorsBySearch,
+    createSlot,
+    bookSlot,
+    chat,
+    getChat,
+    getMentorProfile
 }

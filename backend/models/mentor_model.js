@@ -15,7 +15,7 @@ const mentorSchema = new Schema ({
         type:String,
         required:true
     }],
-    profile:{
+    domain:{
         type:String,
         required:true
     },

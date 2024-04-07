@@ -9,7 +9,7 @@ const storage = multer.diskStorage({
 });
 // Function to filter file types
 const fileFilter = function (req, file, cb) {
-  const filetypes = /jpeg|jpg|png/;
+  const filetypes = /jpeg|jpg|png|avif/;
   const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
   const mimetype = filetypes.test(file.mimetype);
 

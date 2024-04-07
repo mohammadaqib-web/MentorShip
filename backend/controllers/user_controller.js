@@ -11,14 +11,13 @@ const slotModel = require('../models/slot_model');
 const chatModel = require('../models/chat_model');
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
-  auth: {
-    user: process.env.SMTP_MAIL,
-    pass: process.env.SMTP_PASS,
-  },
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT,
+    auth: {
+        user: process.env.SMTP_MAIL,
+        pass: process.env.SMTP_PASS,
+    },
 });
-
 
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -26,320 +25,330 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-const addUser = async(req,res) => {
-    const {username,email,role,password}=req.body;
-    if(!username||!email||!role||!password){
-        return res.status(400).json({message:"All fields are mandatory!"});
+const addUser = async (req, res) => {
+    const { fullname, email, role, password } = req.body;
+    if (!fullname || !email || !role || !password) {
+        return res.status(400).json({ message: "All fields are mandatory!" });
     }
 
-    const findMail = await UserModel.findOne({email});
-    if(findMail){
-        return res.status(400).json({message:"Email already registered!"});
+    const findMail = await UserModel.findOne({ email });
+    if (findMail) {
+        return res.status(400).json({ message: "Email already registered!" });
     }
+    
 
-    const hashedPassword = await bcrypt.hash(password,16);
-    const newUser = new UserModel({username,email,role,password:hashedPassword,isVerified:false});
+    const hashedPassword = await bcrypt.hash(password, 16);
+    const newUser = new UserModel({ fullname, email, role, password: hashedPassword, isVerified: false });
     const user = await newUser.save();
-    if(!user){
-        return res.status(400).json({message:"Error while saving user!"});
+    if (!user) {
+        return res.status(400).json({ message: "Error while saving user!" });
     }
 
-    sendOtpVerificationEmail(user,res);
+    sendOtpVerificationEmail(user, res);
 
     // return res.status(200).json({message:"User created successfully!",user:user});
 }
 
-const verifyOTP = async(req,res)=>{
+const verifyOTP = async (req, res) => {
     try {
-        const {userId,otp} = req.body;
-        if(!userId||!otp){
-            return res.status(400).json({message:"All fields are mandatory!"});
+        const { userId, otp } = req.body;
+        if (!userId || !otp) {
+            return res.status(400).json({ message: "All fields are mandatory!" });
         }
 
-        const userOtpVerificationRecords = await userOtpVerification.find({userId});
-        if(userOtpVerificationRecords.length<=0){
-            return res.status(400).json({message:"Account record doesn't exist!"});
+        const userOtpVerificationRecords = await userOtpVerification.find({ userId });
+        if (userOtpVerificationRecords.length <= 0) {
+            return res.status(400).json({ message: "Account record doesn't exist!" });
         }
 
-        const {expiresAt} = userOtpVerificationRecords[0];
+        const { expiresAt } = userOtpVerificationRecords[0];
         const hashedOTP = userOtpVerificationRecords[0].otp;
 
-        if(expiresAt<Date.now()){
-            await userOtpVerification.deleteMany({userId});
-            return res.status(400).json({message:"Code has expired. Please request again!"});
+        if (expiresAt < Date.now()) {
+            await userOtpVerification.deleteMany({ userId });
+            return res.status(400).json({ message: "Code has expired. Please request again!" });
         }
-        const validOTP = await bcrypt.compare(otp,hashedOTP);
-        if(!validOTP){
-            return res.status(400).json({message:"Invalid code passed.Check your inbox!"});
+        const validOTP = await bcrypt.compare(otp, hashedOTP);
+        if (!validOTP) {
+            return res.status(400).json({ message: "Invalid code passed.Check your inbox!" });
         }
 
-        await UserModel.updateOne({_id:userId},{isVerified:true});
-        await userOtpVerification.deleteMany({userId});
+        await UserModel.updateOne({ _id: userId }, { isVerified: true });
+        await userOtpVerification.deleteMany({ userId });
 
-        return res.status(200).json({status:"VERFIED",message:"User email verified successfully!"});
+        return res.status(200).json({ status: "VERFIED", message: "E-mail verified successfully!" });
     } catch (error) {
-        return res.status(400).json({status:"FAILED",message:error.message});
+        return res.status(400).json({ status: "FAILED", message: "Error Occurred!" });
     }
 }
 
-const resendOTPVerificationCode = async(req,res) => {
+const resendOTPVerificationCode = async (req, res) => {
     try {
-        const {userId,email} = req.body;
-        const user = {_id:userId,email}
-        if(!userId||!email){
-            return res.status(400).json({message:"Empty details are not allowed!"});
+        const { userId, email } = req.body;
+        const user = { _id: userId, email }
+        if (!userId || !email) {
+            return res.status(400).json({ message: "Empty details are not allowed!" });
         }
 
-        const checkVeirfied = await UserModel.findOne({email});
-        if(!checkVeirfied){
-            return res.status(400).json({message:"Kindly fill up the SignUp form first!"});
+        const checkVeirfied = await UserModel.findOne({ email });
+        if (!checkVeirfied) {
+            return res.status(400).json({ message: "Kindly fill up the SignUp form first!" });
         }
 
-        if(checkVeirfied.isVerified){
-            return res.status(400).json({message:"Email already verified!"});
+        if (checkVeirfied.isVerified) {
+            return res.status(400).json({ message: "Email already verified!" });
         }
 
-        await userOtpVerification.deleteMany({userId});
-        sendOtpVerificationEmail(user,res);
+        await userOtpVerification.deleteMany({ userId });
+        sendOtpVerificationEmail(user, res);
     } catch (error) {
-        return res.status(400).json({status:"FAILED",message:error.message});
+        return res.status(400).json({ status: "FAILED", message: "Error Occurred!" });
     }
 }
 
-const loginUser = async(req,res) => {
-    const {email,password} = req.body;
-    if(!email||!password){
-        return res.status(400).json({message:"All fields are mandatory!"});
+const loginUser = async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) {
+        return res.status(400).json({ message: "All fields are mandatory!" });
     }
 
-    const user = await UserModel.findOne({email});
-    if(!user){
-        return res.status(400).json({message:"Email is not Registered!"});
+    const user = await UserModel.findOne({ email: { $regex: email, $options: 'i' } });
+    if (!user) {
+        return res.status(400).json({ message: "Email is not Registered!" });
     }
 
     if(!user.isVerified){
-        return res.status(401).json({message:"Kindly verify your email to LogIn!"});
+        await UserModel.deleteOne({email: { $regex: email, $options: 'i' }});
+        return res.status(400).json({message:"Email not registered!"});
     }
 
-    const checkPassword = await bcrypt.compare(password,user.password);
-    if(!checkPassword){
-        return res.status(400).json({message:"Email or Password is incorrect!"});
+    const checkPassword = await bcrypt.compare(password, user.password);
+    if (!checkPassword) {
+        return res.status(400).json({ message: "Email or Password is incorrect!" });
     }
 
-    const token = await jwt.sign(user.email,process.env.JWT_SECRET);
-    const userInfo = {"id":user._id,"email":user.email,"username":user.username};
+    const token = await jwt.sign(user.email, process.env.JWT_SECRET);
+    const userInfo = { "id": user._id, "email": user.email, "fullname": user.fullname, "role": user.role, "isVerified": user.isVerified };
 
-    return res.status(200).json({message:"User logged in successfully!",user:userInfo,token:token});
+    return res.status(200).json({ message: "User logged in successfully!", user: userInfo, token: token });
 }
 
-const sendOtpVerificationEmail = async(user,res)=>{
+const verifyEmail = async(req,res) => {
+    const {email} = req.body;
+
+    try {
+        const findUser = await UserModel.findOne({email});
+        if(!findUser){
+            return res.status(400).json({message:"User not found!"});
+        }
+
+        const user = {"_id":findUser._id,"email":findUser.email}
+        sendOtpVerificationEmail(user,res);
+    } catch (error) {
+        return res.status(400).json({message:"Error Occurred!"});
+    }
+}
+
+const sendOtpVerificationEmail = async (user, res) => {
     try {
         const { _id, email } = user;
-        const otp = `${Math.floor(1000+Math.random()*9000)}`;
+        const otp = `${Math.floor(1000 + Math.random() * 9000)}`;
 
         const mailOptions = ({
             from: `"Job Dekho"${process.env.SMTP_MAIL}`, // sender address
             to: email, // list of receivers
             subject: `Verify Your Email`, // Subject line
             html: `<p>Enter <strong>${otp}</strong> in the app to verify your email address and complete the signup!</p>
-            <p>This code <strong>expires in 1 hour</strong>.</p>`, 
+            <p>This code <strong>expires in 1 hour</strong>.</p>`,
         });
 
-        const hashedOTP = await bcrypt.hash(otp,10);
+        const hashedOTP = await bcrypt.hash(otp, 10);
         const saveOtp = new userOtpVerification({
-            userId:_id,
-            otp:hashedOTP,
-            createdAt:Date.now(),
-            expiresAt: Date.now()+3600000
-        }) 
+            userId: _id,
+            otp: hashedOTP,
+            createdAt: Date.now(),
+            expiresAt: Date.now() + 3600000
+        })
 
         await saveOtp.save();
         await transporter.sendMail(mailOptions);
-        return res.status(201).json({status:"PENDING",message:"Verification OTP sent to E-mail",data:{userId:_id,email}});
+        return res.status(201).json({ status: "PENDING", message: "Verification OTP sent to E-mail", data: { userId: _id, email } });
     } catch (error) {
-        return res.status(400).json({status:"FAILED",message:error.message});
+        return res.status(400).json({ status: "FAILED", message: "Error Occurred!" });
     }
 }
 
 const editMenteeProfile = async (req, res) => {
     const { name, domain, location } = req.body;
-    const image = req.file.path;
+    const image = req.file ? req.file.path : null; // Check if req.file exists
 
     try {
-        if (!name || !domain || !location || !image) {
+        if (!name || !domain || !location||!image) {
             return res.status(400).json({ message: "All fields are mandatory!" });
         }
 
-        const cloudinaryResult = await cloudinary.uploader.upload(image);
-        if (!cloudinaryResult) {
-            return res.status(400).json({ message: "Error while uploading image" });
-        }
+        let updateData;
+        let message;
 
-        const findMenteeData = await menteeModel.find({ userId: req.user._id });
-        if (findMenteeData.length > 0) {
-            const updateData = await menteeModel.updateOne({ userId: req.user._id }, { name, domain, location, image: cloudinaryResult.secure_url });
-            if (updateData.modifiedCount === 1) {
-                return res.status(200).json({ message: "Details updated successfully!" });
+        if (image) {
+            const cloudinaryResult = await cloudinary.uploader.upload(image);
+            if (!cloudinaryResult) {
+                return res.status(400).json({ message: "Error while uploading image" });
+            }
+
+            const findMenteeData = await menteeModel.find({ userId: req.user._id });
+            if (findMenteeData.length > 0) {
+                updateData = await menteeModel.updateOne({ userId: req.user._id }, { name, domain, location, image: cloudinaryResult.secure_url });
+                message = "Details updated successfully!";
             } else {
-                return res.status(400).json({ message: "Error while updating details!" });
+                const menteeData = new menteeModel({ userId: req.user._id, name, domain, location, image: cloudinaryResult.secure_url });
+                const resp = await menteeData.save();
+                if (resp) {
+                    message = "Details saved successfully!";
+                } else {
+                    return res.status(400).json({ message: "Error while saving details!" });
+                }
             }
         } else {
-            const menteeData = new menteeModel({ userId: req.user._id, name, domain, location, image: cloudinaryResult.secure_url });
-            const resp = await menteeData.save();
-            if (resp) {
-                return res.status(200).json({ message: "Details saved successfully!" });
+            const findMenteeData = await menteeModel.find({ userId: req.user._id });
+            if (findMenteeData.length > 0) {
+                updateData = await menteeModel.updateOne({ userId: req.user._id }, { name, domain, location });
+                message = "Details updated successfully!";
             } else {
-                return res.status(400).json({ message: "Error while saving details!" });
+                const menteeData = new menteeModel({ userId: req.user._id, name, domain, location });
+                const resp = await menteeData.save();
+                if (resp) {
+                    message = "Details saved successfully!";
+                } else {
+                    return res.status(400).json({ message: "Error while saving details!" });
+                }
             }
         }
+
+        if (updateData && updateData.modifiedCount === 1) {
+            return res.status(200).json({ message });
+        } else {
+            return res.status(400).json({ message: "Error while updating details!" });
+        }
     } catch (error) {
-        return res.status(400).json({ message: error.message });
+        console.log(error);
+        return res.status(400).json({ message: "Error Occurred!" });
     }
 }
 
-const editMentorProfile = async(req,res) => {
-    const {name,skills,about,location,company,domain} = req.body;
-    const image = req.file.path;
+const editMentorProfile = async (req, res) => {
+    const { name, skills, about, location, company, domain } = req.body;
+    const image = req.file ? req.file.path : null; // Check if req.file exists
 
     try {
-        if(!name||!skills||!about||!location||!company||!image||!domain){
-            return res.status(400).json({message:"All fields are mandatory!"});
+        if (!name || !skills || !about || !location || !company||!image  || !domain) {
+            return res.status(400).json({ message: "All fields are mandatory!" });
         }
 
-        const cloudinaryResult = await cloudinary.uploader.upload(image);
-        if (!cloudinaryResult) {
-            return res.status(400).json({ message: "Error while uploading image" });
-        }
+        let updateData;
+        let message;
 
-        const findMentorData = await mentorModel.find({ userId: req.user._id });
-        if (findMentorData.length > 0) {
-            const updateData = await mentorModel.updateOne({ userId: req.user._id }, { name, location, image: cloudinaryResult.secure_url,skills,about,company,domain });
-            if (updateData.modifiedCount === 1) {
-                return res.status(200).json({ message: "Details updated successfully!" });
+        if (image) {
+            const cloudinaryResult = await cloudinary.uploader.upload(image);
+            if (!cloudinaryResult) {
+                return res.status(400).json({ message: "Error while uploading image" });
+            }
+
+            const findMentorData = await mentorModel.find({ userId: req.user._id });
+            if (findMentorData.length > 0) {
+                updateData = await mentorModel.updateOne({ userId: req.user._id }, { name, location, image: cloudinaryResult.secure_url, skills, about, company, domain });
+                message = "Details updated successfully!";
             } else {
-                return res.status(400).json({ message: "Error while updating details!" });
+                const mentorData = new mentorModel({ userId: req.user._id, name, location, image: cloudinaryResult.secure_url, skills, about, company, domain });
+                const resp = await mentorData.save();
+                if (resp) {
+                    message = "Details saved successfully!";
+                } else {
+                    return res.status(400).json({ message: "Error while saving details!" });
+                }
             }
         } else {
-            const mentorData = new mentorModel({ userId: req.user._id, name, location, image: cloudinaryResult.secure_url,skills,about,company,domain });
-            const resp = await mentorData.save();
-            if (resp) {
-                return res.status(200).json({ message: "Details saved successfully!" });
+            const findMentorData = await mentorModel.find({ userId: req.user._id });
+            if (findMentorData.length > 0) {
+                updateData = await mentorModel.updateOne({ userId: req.user._id }, { name, location, skills, about, company, domain });
+                message = "Details updated successfully!";
             } else {
-                return res.status(400).json({ message: "Error while saving details!" });
+                const mentorData = new mentorModel({ userId: req.user._id, name, location, skills, about, company, domain });
+                const resp = await mentorData.save();
+                if (resp) {
+                    message = "Details saved successfully!";
+                } else {
+                    return res.status(400).json({ message: "Error while saving details!" });
+                }
             }
         }
+
+            return res.status(200).json({ message });
     } catch (error) {
-        return res.status(400).json({message:error.message});
+        return res.status(400).json({ message: "Error Occurred!" });
     }
 }
 
-const getAllMentors = async(req,res) => {
+
+const getAllMentors = async (req, res) => {
     try {
         const findMentors = await mentorModel.find();
-        if(findMentors.length<=0){
-            return res.status(400).json({message:"No Mentors Found!"});
+        if (findMentors.length <= 0) {
+            return res.status(400).json({ message: "No Mentors Found!" });
         }
 
-        return res.status(200).json({message:"Mentors Found",mentors:findMentors});
+        return res.status(200).json({ message: "Mentors Found", mentors: findMentors });
     } catch (error) {
-        return res.status(400).json({message:error.message});
+        return res.status(400).json({ message: "Error Occurred!" });
     }
 }
 
-const getMentorsBySearch = async(req,res)=>{
-    const {name,location,profile} = req.body;
+const getMentorsBySearch = async (req, res) => {
+    const { search } = req.body;
 
     try {
-        if(!name&&!location&&!profile){
-            return res.status(400).json({message:"You have to fill atleast one section to search!"});
+        if (!search) {
+            return res.status(400).json({ message: "You have to fill the search field to search!" });
         }
 
-        if(name){
-            const findByName = await mentorModel.find({name:{ $regex: name, $options: 'i' }});
-            if(!findByName){
-                return res.status(400).json({message:"Mentor not found!"});
-            }
+        const mentors = await mentorModel.find({
+            $or: [
+                { name: { $regex: search, $options: 'i' } },
+                { location: { $regex: search, $options: 'i' } },
+                { domain: { $regex: search, $options: 'i' } }
+            ]
+        });
 
-            return res.status(200).json({message:"Mentor Found",mentor:findByName});
+        if (!mentors.length) {
+            return res.status(400).json({ message: "Mentor not found!" });
         }
 
-        if(location){
-            const findByLocation = await mentorModel.find({location:{ $regex: location, $options: 'i' }});
-            if(!findByLocation){
-                return res.status(400).json({message:"Mentor not found!"});
-            }
-
-            return res.status(200).json({message:"Mentor Found",mentor:findByLocation});
-        }
-
-        if(profile){
-            const findByProfile = await mentorModel.find({profile:{ $regex: profile, $options: 'i' }});
-            if(!findByProfile){
-                return res.status(400).json({message:"Mentor not found!"});
-            }
-
-            return res.status(200).json({message:"Mentor Found",mentor:findByProfile});
-        }
-
-        if(name&&location){
-            const find = await mentorModel.find({name:{ $regex: name, $options: 'i' },location:{ $regex: location, $options: 'i' }});
-            if(!find){
-                return res.status(400).json({message:"Mentor not found!"});
-            }
-
-            return res.status(200).json({message:"Mentor Found",mentor:find});
-        }
-
-        if(name&&profile){
-            const find = await mentorModel.find({name:{ $regex: name, $options: 'i' },profile:{ $regex: profile, $options: 'i' }});
-            if(!find){
-                return res.status(400).json({message:"Mentor not found!"});
-            }
-
-            return res.status(200).json({message:"Mentor Found",mentor:find});
-        }
-
-        if(profile&&location){
-            const find = await mentorModel.find({profile:{ $regex: profile, $options: 'i' },location:{ $regex: location, $options: 'i' }});
-            if(!find){
-                return res.status(400).json({message:"Mentor not found!"});
-            }
-
-            return res.status(200).json({message:"Mentor Found",mentor:find});
-        }
-
-        if(name&&location&&profile){
-            const find = await mentorModel.find({name:{ $regex: name, $options: 'i' },location:{ $regex: location, $options: 'i' },profile:{ $regex: profile, $options: 'i' }});
-            if(!find){
-                return res.status(400).json({message:"Mentor not found!"});
-            }
-
-            return res.status(200).json({message:"Mentor Found",mentor:find});
-        }
+        return res.status(200).json({ message: "Mentor Found", mentors });
     } catch (error) {
-        return res.status(400).json({message:error.message});
+        return res.status(400).json({ message: "Error Occurred!" });
     }
 }
 
-const createSlot = async(req,res) =>{
-    const {slotDate,slotTime} = req.body;
+
+const createSlot = async (req, res) => {
+    const { slotDate, slotTime } = req.body;
 
     try {
-        if(!slotDate||!slotTime){
-            return res.status(400).json({message:"Both fields are mandatory"});
+        if (!slotDate || !slotTime) {
+            return res.status(400).json({ message: "Both fields are mandatory" });
         }
 
-        const findSlot = await slotModel.find({postedBy:req.user._id,slotTime,slotDate});
-        if(findSlot){
-            return res.status(400).json({message:"You have already opened this slot!"});
+        const findSlot = await slotModel.find({ postedBy: req.user._id, slotTime, slotDate });
+        if (findSlot) {
+            return res.status(400).json({ message: "You have already opened this slot!" });
         }
 
-        const makeSlot = new slotModel({postedBy:req.user._id,slotTime,slotDate});
+        const makeSlot = new slotModel({ postedBy: req.user._id, slotTime, slotDate });
         const saveSlot = await makeSlot.save();
 
-        return res.status(201).json({message:"Slot created successfully",slot:saveSlot});
+        return res.status(201).json({ message: "Slot created successfully", slot: saveSlot });
     } catch (error) {
-        return res.status(400).json({message:error.message});
+        return res.status(400).json({ message: "Error Occurred!" });
     }
 }
 
@@ -371,15 +380,15 @@ const bookSlot = async (req, res) => {
 
         return res.status(200).json({ message: "Slot booked successfully!" });
     } catch (error) {
-        return res.status(400).json({ message: error.message });
+        return res.status(400).json({ message: "Error Occurred!" });
     }
 }
 
 const chat = async (req, res) => {
     const receiverId = req.params.id;
     const senderId = req.user._id;
-    const message = req.body.message; 
-    const dateOptions = { timeZone: 'Asia/Kolkata', hours12:false };
+    const message = req.body.message;
+    const dateOptions = { timeZone: 'Asia/Kolkata', hours12: false };
     const currentDate = new Date().toLocaleDateString('en-IN', dateOptions);
     const currentTime = new Date().toLocaleTimeString('en-IN', dateOptions);
 
@@ -395,56 +404,107 @@ const chat = async (req, res) => {
 
         let chat = await chatModel.findOne({ chatBetween: { $all: [senderId, receiverId] } });
         if (chat) {
-            chat.chat.push({ sentBy: senderId, message, sentAt: currentDate +`,`+ currentTime });
+            chat.chat.push({ sentBy: senderId, message, sentAt: currentDate + `,` + currentTime });
             await chat.save();
             return res.status(200).json({ message: "Message sent!", sentMessage: message });
         }
 
         chat = new chatModel({
             chatBetween: [senderId, receiverId],
-            chat: [{ sentBy: senderId, message, sentAt: currentDate +`,`+  currentTime }]
+            chat: [{ sentBy: senderId, message, sentAt: currentDate + `,` + currentTime }]
         });
         await chat.save();
         return res.status(201).json({ message: "Chat created successfully!" });
     } catch (error) {
-        return res.status(400).json({ message: error.message });
+        return res.status(400).json({ message: "Error Occurred!" });
     }
 }
 
-const getChat = async(req,res) => {
+const getChat = async (req, res) => {
     const receiverId = req.params.id;
     const senderId = req.user._id;
 
     try {
-        if(!receiverId||!senderId){
-            return res.status(400).json({message:"Empty ID!"});
+        if (!receiverId || !senderId) {
+            return res.status(400).json({ message: "Empty ID!" });
         }
 
         const chat = await chatModel.findOne({ chatBetween: { $all: [senderId, receiverId] } });
-        if(!chat){
-            return res.status(400).json({message:"Chat not found!"});
-        }        
+        if (!chat) {
+            return res.status(400).json({ message: "Chat not found!" });
+        }
 
-        return res.status(200).json({message:"Chat found!",chat:chat.chat});
+        return res.status(200).json({ message: "Chat found!", chat: chat.chat });
     } catch (error) {
-        return res.status(400).json({message:"Error Occurred!"});
+        return res.status(400).json({ message: "Error Occurred!" });
     }
 }
 
-const getMentorProfile = async(req,res)=>{
+const whomIChatted = async (req, res) => {
+    const  userId  = req.user._id;
+
+    try {
+        const findChats = await chatModel.find({ chatBetween: {$all:[userId]} });
+        if (!findChats || findChats.length === 0) {
+            return res.status(400).json({ message: "No chats found!" });
+        }
+
+        return res.status(200).json({ message: "Chats found!", chat: findChats });
+    } catch (error) {
+        return res.status(400).json({ message: "Error Occurred!" });
+    }
+};
+
+
+const getMentorProfile = async (req, res) => {
     const mentorId = req.params.id;
 
     try {
-        if(!mentorId){
-            return res.status(400).json({message:"Empty ID!"});
+        if (!mentorId) {
+            return res.status(400).json({ message: "Empty ID!" });
         }
 
-        const findMentor = await mentorModel.findOne({userId:mentorId});
-        if(!findMentor){
-            return res.status(400).json({message:"Invalid ID!"});
+        const findMentor = await mentorModel.findOne({ userId: mentorId });
+        if (!findMentor) {
+            return res.status(400).json({ message: "Invalid ID!" });
         }
 
-        return res.status(200).json({message:"Mentor Found!",mentor:findMentor});
+        return res.status(200).json({ message: "Mentor Found!", mentor: findMentor });
+    } catch (error) {
+        return res.status(400).json({ message: "Error Occurred!" });
+    }
+}
+
+const getMentee = async(req,res)=>{
+    try {
+        const findMentee = await menteeModel.findOne({userId:req.user._id});
+
+        return res.status(200).json({message:"Mentee found!",mentee:findMentee});
+    } catch (error) {
+        return res.status(400).json({message:"Error Occurred"})
+    }
+}
+
+const getProfileMentor = async(req,res)=>{
+    try {
+        const findMentor = await mentorModel.findOne({userId:req.user._id});
+
+        return res.status(200).json({message:"Mentor found!",mentor:findMentor});
+    } catch (error) {
+        return res.status(400).json({message:"Error Occurred"})
+    }
+}
+
+const getUser = async(req,res)=>{
+    const paramsId = req.params.id;
+    
+    try {
+        const getUser = await UserModel.findById({_id:paramsId});
+        if(!getUser){
+            return res.status(400).json({message:"User not found!"});
+        }
+
+        return res.status(200).json({message:"User found!",user:getUser});
     } catch (error) {
         return res.status(400).json({message:"Error Occurred!"});
     }
@@ -463,5 +523,10 @@ module.exports = {
     bookSlot,
     chat,
     getChat,
-    getMentorProfile
+    getMentorProfile,
+    getMentee,
+    verifyEmail,
+    getProfileMentor,
+    whomIChatted,
+    getUser
 }

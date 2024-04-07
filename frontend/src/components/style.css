@@ -1,0 +1,45 @@
+*::selection{
+    background-color: #169178;
+    color: white;
+}
+nav{
+    background-color: #169178c6;
+}
+.nav-text{
+    font-size: 1.1rem;
+    color: rgba(252, 252, 252, 0.91);
+}
+.img-card-text{
+    background-color: rgba(255, 255, 255, 0.467);
+    color: black;
+    padding: 8px 5px;
+}
+.read-more{
+    background-color: #169178;
+}
+.read-more:hover{
+    background-color: #169178;
+}
+.domain-heading,.mentor-heading{
+    text-decoration: 4px underline #169178;
+}
+.domain-cell{
+    margin: 2rem 2rem 0px 2rem;
+    padding: 15px;
+    border: 0.5px solid grey;
+    font-weight: bold;
+}
+.domain-cell:hover{
+    border-color:#169178;
+    color: #169178;
+    cursor: pointer;
+}
+@media (max-width:768px){
+    .mentor-card{
+        height: 20rem;
+    }
+}
+
+.user-icon{
+    border: none;
+}

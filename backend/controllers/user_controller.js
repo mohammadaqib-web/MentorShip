@@ -329,7 +329,6 @@ const getMentorsBySearch = async (req, res) => {
     }
 }
 
-
 const createSlot = async (req, res) => {
     const { slotDate, slotTime } = req.body;
 

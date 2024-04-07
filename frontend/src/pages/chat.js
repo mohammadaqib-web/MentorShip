@@ -53,8 +53,8 @@ const Chat = () => {
         }
     };
     const [chat,setChat] = useState();
-    const openChat = async(user)=>{
-        setChat(user);
+    const openChat = async(userr)=>{
+        setChat(userr);
     }
 
     return (
@@ -80,10 +80,19 @@ const Chat = () => {
                         </div>
                     </div>
                     <div className='col-md-9'>
-                        {chat&&
-                            <div className='mt-4 ms-5'>
+                        {chat&&<>
+                            <div className=' mt-3 pt-4 ps-5 pb-3 bg-body-secondary' style={{marginLeft:"-12px"}}>
                                 <h3>{chat.fullname}</h3>
                             </div>
+                            <div className='row'>
+                                <div className='col-md-6'>
+
+                                </div>
+                                <div className='col-md-6'>
+
+                                </div>
+                            </div>
+                            </>
                         }
                     </div>
                 </div>

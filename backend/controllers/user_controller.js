@@ -155,7 +155,7 @@ const sendOtpVerificationEmail = async (user, res) => {
         const otp = `${Math.floor(1000 + Math.random() * 9000)}`;
 
         const mailOptions = ({
-            from: `"Job Dekho"${process.env.SMTP_MAIL}`, // sender address
+            from: `"Mentor"${process.env.SMTP_MAIL}`, // sender address
             to: email, // list of receivers
             subject: `Verify Your Email`, // Subject line
             html: `<p>Enter <strong>${otp}</strong> in the app to verify your email address and complete the signup!</p>

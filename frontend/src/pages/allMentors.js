@@ -25,7 +25,7 @@ const AllMentors = () => {
         
         try {
             const searchMentor = await axios.post(`${process.env.REACT_APP_API_BASE_URL}/api/mentor/searchMentor`,{search});
-            console.log(searchMentor);
+            setMentors(searchMentor.data.mentors);
         } catch (error) {
             toast.error(error.response.data.message);
         }
